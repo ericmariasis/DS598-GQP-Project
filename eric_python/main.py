@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import pandas
 import pandas as pd
@@ -10,7 +12,6 @@ from keras.layers import MaxPool2D, Dropout, Conv2D, Flatten, Dense
 from termcolor import colored as cl
 from datetime import timedelta
 from datetime import datetime
-from finta import TA
 from backtesting import Backtest, Strategy
 from backtesting.lib import crossover, SignalStrategy, TrailingStrategy
 import config
@@ -76,13 +77,9 @@ def label_df(dframe, prices, windowSize, numDays):
     while countRow <= numDays:
         minValue = min(prices[winBegin:winEnd])
         maxValue = max(prices[winBegin:winEnd])
-        print("MIN VALUE ISSSS", minValue)
-        print("MAX VALUE ISSSS", maxValue)
         for i, val in enumerate(prices[winBegin:winEnd]):
-            print("I VAL ISSSSS", i)
             finalInd = i + winBegin
             if val == minValue and val is not None:
-                print("GOT TO DA BUY BABYYYYY")
                 labels[finalInd] = HOLD
                 labels[finalInd+1] = BUY
             elif val == maxValue and val is not None:
@@ -94,6 +91,9 @@ def label_df(dframe, prices, windowSize, numDays):
         winEnd = winBegin + windowSize
         countRow = winEnd
     dframe['y'] = labels
+    dframe['y_rounded'] = round(dframe['y']).astype(int)
+    dframe['y'] = dframe['y_rounded']
+    dframe.drop('y_rounded', axis=1, inplace=True)
     return dframe
 
 def build_model(full_data):
@@ -104,17 +104,20 @@ def build_model(full_data):
                                 'conv2d_strides_2': 1,
                                 'kernel_regularizer_2': 0.0, 'layers': 'two'},
               'dense_layers': {'dense_do_1': 0.3, 'dense_nodes_1': 128, 'kernel_regularizer_1': 0.0, 'layers': 'one'},
-              'epochs': 3000, 'lr': 0.001, 'optimizer': 'adam'}
+              'epochs': 3000, 'lr': 0.05, 'optimizer': 'adam'}
     full_data_no_y = full_data.drop(columns="y")
     X_train_full, X_test, y_train_full, y_test = train_test_split(full_data_no_y.values, full_data['y'].values, random_state=42)
     X_train, X_valid, y_train, y_valid = train_test_split(X_train_full, y_train_full, random_state=42)
+    print("model X_train shape", X_train.shape)
     X_train = reshape_as_image(X_train, 3, 3)
     X_valid = reshape_as_image(X_valid, 3, 3)
     X_test = reshape_as_image(X_test, 3, 3)
     X_train = np.stack((X_train,) * 3, axis=-1)
     X_test = np.stack((X_test,) * 3, axis=-1)
     X_valid = np.stack((X_valid,) * 3, axis=-1)
-    print("XTRAIN SHAPE IS", X_train.shape)
+    full_data_no_y = full_data_no_y.to_numpy()
+    full_data_no_y = reshape_as_image(full_data_no_y, 3, 3)
+    full_data_no_y = np.stack((full_data_no_y,) * 3, axis=-1)
     model = Sequential()
 
     print("Training with params {}".format(params))
@@ -167,7 +170,7 @@ def build_model(full_data):
 
     model.compile(loss='categorical_crossentropy', optimizer=optimizer, metrics=['accuracy', f1_metric])
 
-    return model, X_train, X_valid, X_test, X_train, y_train, y_valid
+    return model, X_train, X_valid, X_test, X_train, y_train, y_valid, full_data_no_y, y_test
 base_url = 'https://cloud.iexapis.com/'
 version = 'stable/'
 
@@ -184,7 +187,7 @@ endpoint_path = f'stock/{symbol_param}/chart/date/20220203'
 api_call = f'{base_url}{version}{endpoint_path}{query_params}'
 print(f'API Call: {api_call}')
 
-#r = requests.get(api_call) # Make HTTPS call
+r = requests.get(api_call) # Make HTTPS call
 #print("REQUESTS STATUS CODE IS ", r.status_code)
 #data = r.json() # Decode JSON
 
@@ -230,18 +233,35 @@ x = X.values #returns a numpy array
 min_max_scaler = preprocessing.MinMaxScaler()
 x_scaled = min_max_scaler.fit_transform(x)
 X = pd.DataFrame(x_scaled, columns=X.columns)
-print("DOSE X COLUMNSSSSSS!!!!!")
-print(X.columns)
-print(X)
 X = label_df(X, X['Close'].values, 11, X.shape[0])
+df['y'] = X['y'].values
 print(X.columns)
 print(X)
-model, X_train, X_valid, X_test, X_train, y_train, y_valid = build_model(X)
-print("XTEST SHAPE", X_valid.shape)
-y_pred = model.predict(X_test)
-print(y_pred)
-exit()
+model, X_train, X_valid, X_test, X_train, y_train, y_valid, X_no_y, y_test = build_model(X)
+y_pred_test = model.predict(X_test)
+y_pred_train = model.predict(X_train)
+y_pred_valid = model.predict(X_valid)
+y_pred_full = model.predict(X_no_y)
+#print("predshapetrain", y_pred_train.shape)
+#print("predshapetest", y_pred_test.shape)
+#print("predshapevalid", y_pred_valid.shape)
+#print("ypredfullshape", y_pred_full.shape)
+#print("closeshape", X['Close'].shape)
+#print("Xshape", X.shape)
+#print(y_pred_full)
+df['predicted_y'] = np.argmax(y_pred_full, axis=1)
+#print(df[df['predicted_y'] == 2].shape)
+#print(df[df['predicted_y'] == 1].shape)
+#print(df[df['predicted_y'] == 0].shape)
 
+#print(df[df['y'] == 2].shape)
+#print(df[df['y'] == 1].shape)
+#print(df[df['y'] == 0].shape)
+#print(df['y'])
+
+print(df[['y','predicted_y']])
+
+use_ml = True
 class ParabolicStrategy(Strategy):
 
     def init(self):
@@ -251,24 +271,36 @@ class ParabolicStrategy(Strategy):
         self.high = self.data.High
         self.low = self.data.Low
         self.close = self.data.close
-        print("---------------CLOSE---------")
-        print(self.close)
+        #print("---------------CLOSE---------")
+        #print(self.close)
         self.adx = self.I(ta.ADX, self.high, self.low, self.close)
         self.sar = self.I(ta.SAR, self.high, self.low)
-        print("----------SAR-------------")
-        print(self.sar)
+        #print("----------SAR-------------")
+        #print(self.sar)
         self.pdi = self.I(ta.PLUS_DI, self.high, self.low, self.close)
         self.mdi = self.I(ta.MINUS_DI, self.high, self.low, self.close)
+        self.rsi = self.I(ta.RSI, self.close)
+        self.pred_y = self.data.predicted_y
 
     def next(self):
-        if self.adx[-1] > 25 and self.adx[-2] <= 25 and self.pdi[-1] > self.mdi[-1] and not self.position.is_long:
-            self.buy(size=0.2)
-        if self.adx[-1] > 25 and self.adx[-2] <= 25 and self.mdi[-1] > self.pdi[-1] and not self.position.is_short:
-            self.sell(size=0.2)
+        #print("SELF ADX -2 -1 0 [", self.adx[-2], self.adx[-1], self.adx[0], "]")
+        #print("NEXT PREDICTED ACTION GENERAL", self.pred_y[0])
+        if ((self.adx[-1] > 25 and self.adx[-2] <= 25 and self.pdi[-1] > self.mdi[-1]) or (use_ml and self.pred_y[0] == BUY)) and not self.position.is_long:
+            #if use_ml and self.pred_y[0] == BUY:
+                #print("ML BUY!!!!!")
+            #print("NEXT PREDICTED ACTION", self.pred_y[0])
+            self.buy(size=0.2, tp=350, limit=100, sl=90)
+        if ((self.adx[-1] > 25 and self.adx[-2] <= 25 and self.mdi[-1] > self.pdi[-1] and self.rsi[-1] < 30) or (use_ml and self.pred_y[0] == SELL)) and not self.position.is_short:
+            #if use_ml and self.pred_y[0] == SELL:
+                #print("ML SELL!!!!!")
+            #print("NEXT PREDICTED ACTION", self.pred_y[0])
+            self.sell(size=0.2, tp=200, limit=300, sl=400)
         # close buy position when price moves below PSAR and close sell position when price moves below psar
         if self.position.is_long and self.sar[-1] > self.close[-1] and self.sar[-2] <= self.close[-2]:
+            #print("NEXT PREDICTED ACTION", self.pred_y[0])
             self.position.close()
         if self.position.is_short and self.sar[-1] < self.close[-1] and self.sar[-2] >= self.close[-2]:
+            #print("NEXT PREDICTED ACTION", self.pred_y[0])
             self.position.close()
 
 
@@ -276,6 +308,16 @@ class ParabolicStrategy(Strategy):
 bt = Backtest(df, ParabolicStrategy, cash=100_000, commission=.002)
 stats = bt.run()
 print(stats)
+
+def expectunity(stats):
+    numTrades = stats['# Trades']
+    tradeDays = stats['Avg. Trade Duration'].days * numTrades
+    expectancy = stats['Expectancy [%]'] / 100.0
+    opportunities = numTrades * 365 / tradeDays
+    return expectancy * opportunities
+
+
+print(expectunity(stats))
 
 #MISCELLANEOUS
 # print(len(data_pd['chart'][0]))
