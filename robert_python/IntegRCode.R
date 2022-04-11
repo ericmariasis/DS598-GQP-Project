@@ -1,8 +1,20 @@
 oldw <- getOption("warn")
 options(warn = -1)
 
-library(pacman)
-pacman::p_load(BatchGetSymbols, dplyr, tidyverse, quantstrat)
+# Check if packages are installed (and install if not)
+packages = c("BatchGetSymbols", "dplyr", "tidyverse", "quantstrat")
+
+# Now load or install & load all
+package.check <- lapply(
+  packages,
+  FUN = function(x) {
+    if (!require(x, character.only = TRUE)) {
+      install.packages(x, dependencies = TRUE)
+      library(x, character.only = TRUE)
+    }
+  }
+)
+
 initdate <-  "2001-01-01"   # Set Dates and Info
 from <- "2016-01-01"
 to <- "2021-12-31" # This will give us 5 years of trading data for the selected stocks
@@ -294,6 +306,8 @@ perTrade.all <- rbind(pT.NVDA,pT.TSLA,pT.WST,pT.PAYC,pT.ODFL) # Info per trade
 
 # Trade-Stats info:
 tradeStats.all <- rbind(ts.NVDA,ts.TSLA,ts.WST,ts.PAYC,ts.ODFL) # Info on trade stats
+tradeStats.all <- cbind(tradeStats.all,stock.info$'Expectunity, R1')
+colnames(tradeStats.all)[33] <- "Expectunity"
 
 options(warn = oldw)
 
