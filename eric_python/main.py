@@ -26,6 +26,7 @@ from keras import backend as K
 from sklearn.model_selection import TimeSeriesSplit
 import multiprocessing
 from multiprocessing import Process
+import subprocess
 # Requests
 
 # Constants
@@ -190,6 +191,31 @@ version = 'stable/'
 # Add your publishable API token here.
 token = config.ERIC_IEX_TOKEN
 
+### START SAMPLE CODE ###
+import datetime
+from datetime import date, timedelta
+# n is number of days you want
+def getPreviousDays(n):
+    dates = []
+    ctr = 0
+    for i in range(0, n+n):
+        days_before = (date.today() - timedelta(days=i)).isoformat()
+        # This just means if not Saturday or sunday put it in
+        if (date.today() - timedelta(days=i)).weekday() < 5:
+            #print("WEEKDAY IS", (date.today() - timedelta(days=i)).weekday())
+            #dates.append(days_before)
+            dates.append(days_before.replace('-', ''))
+            ctr = ctr+1
+            #print("CTR IS", ctr, " I IS", i)
+        if ctr == n:
+            print(dates)
+            return dates
+
+
+#getPreviousDays(30)
+### END SAMPLE CODE ###
+
+
 # Specify that youʼre retrieving a specific value from the Key Stats endpoint.
 symbol_param = 'CVX' # Chevron
 field_param = 'marketcap'
@@ -200,7 +226,7 @@ endpoint_path = f'stock/{symbol_param}/chart/date/20220203'
 api_call = f'{base_url}{version}{endpoint_path}{query_params}'
 print(f'API Call: {api_call}')
 
-r = requests.get(api_call) # Make HTTPS call
+#r = requests.get(api_call) # Make HTTPS call
 #print("REQUESTS STATUS CODE IS ", r.status_code)
 #data = r.json() # Decode JSON
 
@@ -399,6 +425,12 @@ class IntegrationClass:
         btOne = self.backtestObj(df, DummyParabolicStrategy, self.cash/2, self.commission)
         btTwo = self.backtestObj(df, ParabolicStrategy, self.cash/2, self.commission)
 
+        # This code will run the R file in R. All you need is the R script file and RStudio installed. It doesn't even have to be open
+        command = 'C:/Program Files/R/R-3.6.2/bin/Rscript'  # I don't think you'll have to change this, but if you do, find where your R files are, and find Rscript
+        arg = '--vanilla'
+        path2script = 'C:/Users/ericm/Documents/WPI/DS598_GQP/python/IntegRCode.r'  # Replace this with the pathway to your version of the R script
+        subprocess.call([command, arg, path2script], shell=True)  # This runs the R file via Rscript
+
         pool = multiprocessing.Pool(processes=3)
         args = [btOne, btTwo]
         statsresults = pool.map(self.statsForBacktestObj, args)
@@ -407,10 +439,16 @@ class IntegrationClass:
         #statsOne = self.statsForBacktestObj(btOne)
         #statsTwo = self.statsForBacktestObj(btTwo)
 
+        # This code takes the csv created by R and opens it up in here
+        statsThree = pd.read_csv(
+            r'C:/Users/ericm/Downloads/tradeStats.csv')  # Replace with pathway to your file (don't change the filename or remove the "r" at the front)
+        statsThree = statsThree.drop(statsThree.columns[0], axis=1)  # This removes the "index" column from the R dataframe
+        print(statsThree)
+        #print(statsThree['Num.Trades'])
 
 #f = open("DS598 Code in Python.R", "r")
 #print(f.read())
 
 if __name__ == '__main__':
-    integration_obj = IntegrationClass(cash=1000000, commission=0.02)
+    integration_obj = IntegrationClass(cash=9000000, commission=0.02)
     integration_obj.run()
