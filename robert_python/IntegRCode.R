@@ -1,3 +1,6 @@
+args = commandArgs(trailingOnly=TRUE)
+initequity = strtoi(args[1])
+
 oldw <- getOption("warn")
 options(warn = -1)
 
@@ -108,7 +111,7 @@ stock("PAYC", currency = "USD", multiplier = 1)
 stock("ODFL", currency = "USD", multiplier = 1)
 
 # Prepare Portfolio and Account
-initeq <- 10000 # Our initial equity will be $10,000.00
+initeq <- initequity # Our initial equity is now dynamic
 tradesize <- .02*initeq # Every trade we will risk 2% of our equity (money management)
 # Note: I tried to set tradesize dynamically (2% of current equity), but I couldn't get it
 
@@ -312,5 +315,3 @@ colnames(tradeStats.all)[33] <- "Expectunity"
 options(warn = oldw)
 
 write.csv(tradeStats.all, "C:/Users/rgjoh/Downloads/tradeStats.csv")
-
-

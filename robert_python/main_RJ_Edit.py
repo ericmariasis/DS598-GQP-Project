@@ -27,7 +27,7 @@ from sklearn.model_selection import TimeSeriesSplit
 import multiprocessing
 from multiprocessing import Process
 
-import subprocess # <--- Robert Addition
+import subprocess
 
 # Requests
 
@@ -406,8 +406,8 @@ class IntegrationClass:
         command = 'C:/Program Files/R/R-3.6.2/bin/Rscript'  # I don't think you'll have to change this, but if you do, find where your R files are, and find Rscript
         arg = '--vanilla'
         path2script = '[replace me with file path]/IntegRCode.r'  # Replace this with the pathway to your version of the R script
-        subprocess.call([command, arg, path2script], shell=True)  # This runs the R file via Rscript
-
+        initequity = 100  # The initial equity that will be used in the R file to trade with
+        subprocess.call([command, path2script, str(initequity)]) # This runs the R file via Rscript
 
         pool = multiprocessing.Pool(processes=3)
         args = [btOne, btTwo]
@@ -425,8 +425,6 @@ class IntegrationClass:
         print(statsThree)
 
 
-#f = open("DS598 Code in Python.R", "r")
-#print(f.read())
 
 if __name__ == '__main__':
     integration_obj = IntegrationClass(cash=1000000, commission=0.02)
