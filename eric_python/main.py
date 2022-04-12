@@ -417,25 +417,30 @@ class IntegrationClass:
     def __init__(self, cash, commission):
         self.cash = cash
         self.commission = commission
+        self.initial_cash = cash
+        self.cash1 = self.cash/3
+        self.cash2 = self.cash/3
+        self.cash3 = self.cash/3
     def backtestObj(self, df, strat, cash, commission):
         return Backtest(df, strat, cash=cash, commission=commission)
     def statsForBacktestObj(self, obj):
         return obj.run()
     def run(self):
-        btOne = self.backtestObj(df, DummyParabolicStrategy, self.cash/2, self.commission)
-        btTwo = self.backtestObj(df, ParabolicStrategy, self.cash/2, self.commission)
+        btOne = self.backtestObj(df, DummyParabolicStrategy, self.cash1, self.commission)
+        btTwo = self.backtestObj(df, ParabolicStrategy, self.cash2, self.commission)
 
         # This code will run the R file in R. All you need is the R script file and RStudio installed. It doesn't even have to be open
-        command = 'C:/Program Files/R/R-3.6.2/bin/Rscript'  # I don't think you'll have to change this, but if you do, find where your R files are, and find Rscript
+        command = '\"C:/Program Files/R/R-4.1.3/bin/Rscript\"'  # I don't think you'll have to change this, but if you do, find where your R files are, and find Rscript
         arg = '--vanilla'
-        path2script = 'C:/Users/ericm/Documents/WPI/DS598_GQP/python/IntegRCode.r'  # Replace this with the pathway to your version of the R script
-        subprocess.call([command, arg, path2script], shell=True)  # This runs the R file via Rscript
+        path2script = 'C:/Users/ericm/Documents/WPI/DS598_GQP/python/IntegRCode.R'  # Replace this with the pathway to your version of the R script
+        initequity = self.cash3
+        subprocess.call([command, path2script, str(initequity)], shell=True)  # This runs the R file via Rscript
 
         pool = multiprocessing.Pool(processes=3)
         args = [btOne, btTwo]
         statsresults = pool.map(self.statsForBacktestObj, args)
-        print("STATS RESULTS IS ", statsresults)
-        print("STATS LEN IS", len(statsresults))
+        #print("STATS RESULTS IS ", statsresults)
+        #print("STATS LEN IS", len(statsresults))
         #statsOne = self.statsForBacktestObj(btOne)
         #statsTwo = self.statsForBacktestObj(btTwo)
 
@@ -443,12 +448,35 @@ class IntegrationClass:
         statsThree = pd.read_csv(
             r'C:/Users/ericm/Downloads/tradeStats.csv')  # Replace with pathway to your file (don't change the filename or remove the "r" at the front)
         statsThree = statsThree.drop(statsThree.columns[0], axis=1)  # This removes the "index" column from the R dataframe
+        statsresults.append(statsThree)
         print(statsThree)
-        #print(statsThree['Num.Trades'])
+        print("STATS RESULTS IS ", statsresults)
+        print("STATS LEN IS", len(statsresults))
+        self.cash = statsresults[0]["Equity Final [$]"] + statsresults[1]["Equity Final [$]"] + statsThree['End.Equity'].sum()
+        print("R EQUITY IS", statsThree['End.Equity'].sum())
+        print("SELF CASH IS", self.cash, "INITIAL CASH WAS", self.initial_cash)
 
-#f = open("DS598 Code in Python.R", "r")
-#print(f.read())
+        # Get expectunities
+        self.e1 = expectunity(statsresults[0])
+        self.e2 = expectunity(statsresults[1])
+        self.e3 = statsThree['Expectunity'].sum() / 5.0
+
+        print("E1 IS", self.e1, "E2 IS", self.e2, "E3 IS", self.e3)
+        self.initial_cash = self.cash
+        if max([self.e1,self.e2,self.e3]) == self.e1:
+            self.cash1 = 0.5 * self.cash
+            self.cash2 = 0.25 * self.cash
+            self.cash3 = 0.25 * self.cash
+        elif max([self.e1,self.e2,self.e3]) == self.e2:
+            self.cash2 = 0.5 * self.cash
+            self.cash1 = 0.25 * self.cash
+            self.cash3 = 0.25 * self.cash
+        elif max([self.e1,self.e2,self.e3]) == self.e3:
+            self.cash3 = 0.5 * self.cash
+            self.cash1 = 0.25 * self.cash
+            self.cash2 = 0.25 * self.cash
 
 if __name__ == '__main__':
     integration_obj = IntegrationClass(cash=9000000, commission=0.02)
+    integration_obj.run()
     integration_obj.run()
